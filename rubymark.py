@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 RubyMark main entry point
 """
@@ -13,7 +14,7 @@ parser = argparse.ArgumentParser(
     description="RubyMark, markdown explainer with ruby support"
 )
 parser.add_argument("-f", "--file", help="input file")
-parser.add_argument("-o", "--output", help="output file, default stdout")
+parser.add_argument("-o", "--output", help="output file, default as stdout")
 parser.add_argument("--verbose", action="store_true", help="verbose output")
 args = parser.parse_args()
 
