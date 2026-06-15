@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RubyMark Live Playground - 漢字旁註與 Markdown 即時渲染工具</title>
+  <meta name="description" content="RubyMark.js 互動式遊樂場：支援標準 Markdown 以及 {漢字}(旁註) 與 ~~刪除線~~ 的即時網頁渲染工具。">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Rubymark Library -->
+  <script src="rubymark.js"></script>
+
+  <style>
+    /* Design Tokens */
+    :root {
+      --bg-gradient: linear-gradient(135deg, #090a0f 0%, #12131e 100%);
+      --panel-bg: rgba(22, 24, 37, 0.7);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-glow: rgba(99, 102, 241, 0.15);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent-color: #6366f1;
+      --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+      --accent-glow: 0 0 20px rgba(99, 102, 241, 0.4);
+      --font-sans: 'Outfit', 'Noto Sans TC', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Layout & Header */
+    header {
+      padding: 2rem 1.5rem 1.5rem;
+      text-align: center;
+      position: relative;
+    }
+
+    header::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 10%;
+      width: 80%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.05em;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      font-weight: 300;
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      padding: 2rem;
+      max-width: 1600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Panels (Glassmorphism) */
+    .panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .panel:focus-within {
+      border-color: rgba(99, 102, 241, 0.4);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4), var(--border-glow);
+    }
+
+    .panel-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(10, 11, 18, 0.4);
+    }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .panel-title::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-gradient);
+    }
+
+    /* Controls & Buttons */
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    select, button {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    select:hover, button:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    button.btn-primary {
+      background: var(--accent-gradient);
+      border: none;
+      font-weight: 600;
+    }
+
+    button.btn-primary:hover {
+      box-shadow: var(--accent-glow);
+      opacity: 0.95;
+    }
+
+    /* Editor View */
+    .editor-container {
+      position: relative;
+      flex: 1;
+      min-height: 500px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      border: none;
+      resize: none;
+      color: #e5e7eb;
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      padding: 1.5rem;
+      line-height: 1.6;
+      outline: none;
+    }
+
+    /* Preview Tabs */
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .tab {
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab.active {
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--accent-color);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    .preview-container {
+      flex: 1;
+      padding: 2rem;
+      overflow-y: auto;
+      min-height: 500px;
+      background: rgba(10, 11, 18, 0.2);
+    }
+
+    /* Markdown Styling in Preview */
+    .markdown-body {
+      color: #e5e7eb;
+      font-size: 1.05rem;
+    }
+
+    .markdown-body h1, .markdown-body h2, .markdown-body h3 {
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .markdown-body h1 { font-size: 1.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; }
+    .markdown-body h2 { font-size: 1.4rem; }
+    .markdown-body h3 { font-size: 1.2rem; }
+
+    .markdown-body p {
+      margin-bottom: 1.2rem;
+    }
+
+    /* Ruby Rendering Enhancements */
+    .markdown-body ruby {
+      ruby-position: over;
+      ruby-align: center;
+      padding: 0 0.15em;
+    }
+
+    .markdown-body rt {
+      font-size: 0.65em;
+      color: #a78bfa;
+      letter-spacing: 0.05em;
+      padding-bottom: 0.1em;
+      user-select: none;
+    }
+
+    /* Table styling */
+    .markdown-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1.5rem;
+    }
+    
+    .markdown-body th, .markdown-body td {
+      border: 1px solid var(--border-color);
+      padding: 0.75rem 1rem;
+      text-align: left;
+    }
+
+    .markdown-body th {
+      background: rgba(255, 255, 255, 0.05);
+      font-weight: 600;
+    }
+
+    /* Code Block & Inline Code */
+    .markdown-body pre {
+      background: #0f1016;
+      border: 1px solid var(--border-color);
+      padding: 1.2rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin-bottom: 1.5rem;
+    }
+
+    .markdown-body code {
+      font-family: var(--font-mono);
+      font-size: 0.9em;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      color: #f472b6;
+    }
+
+    .markdown-body pre code {
+      background: transparent;
+      padding: 0;
+      border-radius: 0;
+      color: #e5e7eb;
+    }
+
+    /* HTML View and Guide Content */
+    .raw-html-view, .guide-view {
+      display: none;
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      color: #e5e7eb;
+      white-space: pre-wrap;
+      overflow-y: auto;
+      height: 100%;
+      padding: 1.5rem;
+      background: #08090d;
+    }
+
+    .guide-view {
+      font-family: var(--font-sans);
+      white-space: normal;
+    }
+
+    .guide-view h3 {
+      margin-top: 1.5rem;
+      margin-bottom: 0.5rem;
+      color: var(--accent-color);
+    }
+
+    .guide-view code {
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      color: #f472b6;
+    }
+
+    /* Sidecard syntax hints */
+    .syntax-card {
+      margin-top: 2rem;
+      grid-column: 1 / -1;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+
+    .syntax-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .syntax-item {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      padding: 1rem;
+      border-radius: 8px;
+    }
+
+    .syntax-title {
+      font-weight: 600;
+      color: var(--accent-color);
+      margin-bottom: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+    .syntax-code {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      color: #e5e7eb;
+      background: #090a0f;
+      padding: 0.4rem 0.6rem;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+      display: inline-block;
+    }
+
+    .syntax-desc {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Footer */
+    footer {
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      border-top: 1px solid var(--border-color);
+      margin-top: auto;
+    }
+
+    footer a {
+      color: var(--accent-color);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1 id="page-title">RubyMark Web Playground</h1>
+    <div class="subtitle">在瀏覽器中直接解析與渲染漢字旁註（振假名/注音）Markdown 語法</div>
+  </header>
+
+  <main>
+    <!-- Left Panel: Markdown Input Editor -->
+    <section class="panel" aria-labelledby="editor-title">
+      <div class="panel-header">
+        <h2 class="panel-title" id="editor-title">Markdown 編輯器</h2>
+        <div class="controls">
+          <select id="preset-selector" aria-label="選取範本">
+            <option value="testRuby">範本：Ruby 基礎功能測試</option>
+            <option value="shirakano">範本：平沢進《白虎野の娘》歌詞</option>
+            <option value="codeProtect">範本：程式碼保護功能測試</option>
+          </select>
+          <button id="btn-clear" type="button">清空</button>
+        </div>
+      </div>
+      <div class="editor-container">
+        <textarea id="markdown-input" spellcheck="false" placeholder="在此處輸入 Markdown..." aria-label="Markdown 原始碼"></textarea>
+      </div>
+    </section>
+
+    <!-- Right Panel: Rendered HTML Preview -->
+    <section class="panel" aria-labelledby="preview-title">
+      <div class="panel-header">
+        <h2 class="panel-title" id="preview-title">即時預覽</h2>
+        <div class="tabs" role="tablist">
+          <div class="tab active" id="tab-preview" role="tab" aria-selected="true" aria-controls="preview-content">視覺預覽</div>
+          <div class="tab" id="tab-html" role="tab" aria-selected="false" aria-controls="html-content">HTML 原始碼</div>
+          <div class="tab" id="tab-guide" role="tab" aria-selected="false" aria-controls="guide-content">使用說明</div>
+        </div>
+      </div>
+      
+      <!-- Preview Mode -->
+      <div class="preview-container" id="preview-content" role="tabpanel">
+        <ruby-mark id="rubymark-viewer" class="markdown-body"></ruby-mark>
+      </div>
+
+      <!-- Raw HTML Mode -->
+      <div class="raw-html-view" id="html-content" role="tabpanel"></div>
+
+      <!-- Guide/Setup Mode -->
+      <div class="guide-view" id="guide-content" role="tabpanel">
+        <h2>如何將 RubyMark 引入您的網頁？</h2>
+        
+        <h3>1. 引入 JavaScript 腳本</h3>
+        <p>在您的 HTML 頁面中引入 <code>rubymark.js</code>。它會自動載入 <code>marked.js</code> 解析器並進行配置：</p>
+        <pre><code>&lt;script src="rubymark.js"&gt;&lt;/script&gt;</code></pre>
+
+        <h3>2. 使用 &lt;ruby-mark&gt; 網頁元件（推薦）</h3>
+        <p>使用標準 Custom Element 來包裹您的 Markdown 語法，內容將會自動轉換並渲染：</p>
+        <pre><code>&lt;ruby-mark&gt;
+# {Ruby}(振假名) 測試
+這是一段包含 {旁註}(輔助說明) 的標準段落。
+&lt;/ruby-mark&gt;</code></pre>
+
+        <h3>3. 使用 Legacy &lt;rubymark&gt; 標籤</h3>
+        <p>如果您想使用更簡短的標籤名稱，我們也支持 <code>&lt;rubymark&gt;</code>。即使它沒有連字元，庫中也會自動監視並將其解析渲染：</p>
+        <pre><code>&lt;rubymark&gt;
+此處的 {漢字}(かんじ) 同樣能被正確解析。
+&lt;/rubymark&gt;</code></pre>
+
+        <h3>4. 動態屬性綁定</h3>
+        <p>您也可以透過 <code>content</code> 屬性來動態改變渲染內容：</p>
+        <pre><code>&lt;ruby-mark content="這是動態 {內容}(Content)"&gt;&lt;/ruby-mark&gt;</code></pre>
+      </div>
+    </section>
+
+    <!-- Bottom Syntax Hint Panel -->
+    <section class="syntax-card" aria-labelledby="syntax-title">
+      <h2 id="syntax-title" style="font-size: 1.2rem; font-weight: 600;">自訂語法對照表</h2>
+      <div class="syntax-grid">
+        <div class="syntax-item">
+          <div class="syntax-title">Ruby 旁註（振假名/注音）</div>
+          <div class="syntax-code">{漢字}(かんじ)</div>
+          <div class="syntax-desc">將會被解析為 HTML5 的標準 <code>&lt;ruby&gt;</code> 標籤，完美支持中日韓旁註。</div>
+        </div>
+        <div class="syntax-item">
+          <div class="syntax-title">刪除線</div>
+          <div class="syntax-code">~~被刪除的文字~~</div>
+          <div class="syntax-desc">將被解析為 HTML <code>&lt;del&gt;</code> 標籤，顯示為刪除線效果。</div>
+        </div>
+        <div class="syntax-item">
+          <div class="syntax-title">程式碼保護</div>
+          <div class="syntax-code">`{not ruby}(text)`</div>
+          <div class="syntax-desc">行內程式碼 <code>`...`</code> 以及多行程式碼塊中，自訂語法會原樣輸出，不會被解析。</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2026 RubyMark. Built for modern, high-fidelity web interfaces.</p>
+  </footer>
+
+  <script>
+    // Presets Content
+    const presets = {
+      testRuby: `# {Ruby}(振り仮名) 測試
+
+Ruby 在西文排版當中，是 {特定的字號}(5¼)，其大小爲 {正文標準字號}(10½) 的一半。
+
+這是一個包含自訂 ~~刪除線~~ 的測試行。`,
+
+      shirakano: `# [{平沢進}(ひらさわすすむ)「{白虎野}(びゃっこの)の{娘}(むすめ)」{歌詞}(かし)]
+
+## [Refrain]
+
+{酔}(よ)いや なぜに {無限}(むげん)と{美杯}(びはい)  
+{酔}(よ)いや なぜに {無限}(むげん)と{美杯}(びはい)  
+{酔}(よ)いや なぜに {無限}(むげん)と{美杯}(びはい) ({酔}(よ)いや {飲}(の)んで {人類}(じんるい) {下戸}(げこ) {美杯}(びはい))
+
+## [Verse 1]
+
+{遠}(とお)くの{空}(そら) {回}(まわ)る{花}(はな)の  
+{円陣}(えんじん)の{喧}(かまびす)しさに  
+あの{日}(ひ)や あの{日}(ひ)に  
+{超}(こ)えてきた{分岐}(ぶんき)が{目}(め)を{覚}(さ)ます  
+かげろうに{身}(み)を{借}(か)りて  
+{道}(みち)を{指}(さ)す{娘}(むすめ)を{追}(お)い  
+{高台}(たかだい)に{現}(あらわ)れた  
+{名}(な)も{知}(し)らぬ{広野}(ひろの)は{懐}(なつ)かしく
+
+---
+*(越南語口白)*
+Xin chào, các bạn  
+Đây là quê hương của chúng tôI  
+Đây là tương lai của chúng tôI`,
+
+      codeProtect: `# 程式碼保護功能測試
+
+當自訂語法位於程式碼區塊內時，不應被解析：
+
+## 1. 行內程式碼保護
+這是一段行內程式碼：\`{not ruby}(text)\` 和 \`~~not del~~\`。
+
+## 2. 程式碼塊保護
+\`\`\`python
+# 程式碼塊中：
+def test():
+    # 這裡的 {ruby}(annotation) 和 ~~strikethrough~~ 都不會被解析！
+    x = "{ruby}(annotation)"
+    y = "~~strikethrough~~"
+\`\`\``
+    };
+
+    // DOM Elements
+    const markdownInput = document.getElementById('markdown-input');
+    const rubymarkViewer = document.getElementById('rubymark-viewer');
+    const presetSelector = document.getElementById('preset-selector');
+    const btnClear = document.getElementById('btn-clear');
+    const rawHtmlView = document.getElementById('html-content');
+
+    const tabPreview = document.getElementById('tab-preview');
+    const tabHtml = document.getElementById('tab-html');
+    const tabGuide = document.getElementById('tab-guide');
+
+    const previewContent = document.getElementById('preview-content');
+    const guideContent = document.getElementById('guide-content');
+
+    // Load preset
+    function loadPreset(key) {
+      if (presets[key]) {
+        markdownInput.value = presets[key];
+        updatePreview();
+      }
+    }
+
+    // Update Live Preview and Raw HTML View
+    function updatePreview() {
+      const text = markdownInput.value;
+      
+      // Update our web component content
+      rubymarkViewer.setAttribute('content', text);
+
+      // Programmatically render to show HTML source code view
+      if (window.RubyMark) {
+        window.RubyMark.render(text).then(html => {
+          // Format HTML with basic indentation for readability
+          rawHtmlView.textContent = html;
+        });
+      }
+    }
+
+    // Set up Presets Selector
+    presetSelector.addEventListener('change', (e) => {
+      loadPreset(e.target.value);
+    });
+
+    // Clear Button
+    btnClear.addEventListener('click', () => {
+      markdownInput.value = '';
+      updatePreview();
+      markdownInput.focus();
+    });
+
+    // Input Event Listener
+    markdownInput.addEventListener('input', updatePreview);
+
+    // Tab Switching Logic
+    function switchTab(activeTab, showElement) {
+      // Deactivate all
+      [tabPreview, tabHtml, tabGuide].forEach(tab => {
+        tab.classList.remove('active');
+        tab.setAttribute('aria-selected', 'false');
+      });
+      [previewContent, rawHtmlView, guideContent].forEach(el => {
+        el.style.display = 'none';
+      });
+
+      // Activate selected
+      activeTab.classList.add('active');
+      activeTab.setAttribute('aria-selected', 'true');
+      showElement.style.display = 'block';
+    }
+
+    tabPreview.addEventListener('click', () => switchTab(tabPreview, previewContent));
+    tabHtml.addEventListener('click', () => switchTab(tabHtml, rawHtmlView));
+    tabGuide.addEventListener('click', () => switchTab(tabGuide, guideContent));
+
+    // Initialize
+    window.addEventListener('load', () => {
+      loadPreset('testRuby');
+      // Periodically update initially in case marked was loading asynchronously
+      setTimeout(updatePreview, 500);
+    });
+  </script>
+</body>
+</html>
