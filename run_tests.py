@@ -6,6 +6,7 @@ Automated tests for RubyMark refactoring
 import sys
 import os
 import re
+import subprocess
 from funcs.explainer import explain
 
 def normalize_html(html_str):
@@ -30,8 +31,8 @@ def normalize_html(html_str):
 
 def run_tests():
     test_cases = [
-        ("testRuby.md", "testRuby.htm"),
-        ("test.md", "test.htm"),
+        ("test/testRuby.md", "test/testRuby.htm"),
+        ("test/test.md", "test/test.htm"),
         ("test/ruby.md", "test/ruby.htm"),
         ("test/歌詞/パレード.md", "test/歌詞/パレード.htm"),
         ("test/歌詞/白虎野の娘.md", "test/歌詞/白虎野の娘.htm"),
@@ -89,11 +90,77 @@ def test():
     else:
         print("PASS")
 
+    # Run error handling tests
+    err_tests_passed = run_error_handling_tests()
+    if not err_tests_passed:
+        failed = True
+
     if failed:
         sys.exit(1)
     else:
         print("All tests passed successfully!")
         sys.exit(0)
+
+def run_error_handling_tests():
+    print("Running error handling tests...")
+    failed = False
+
+    # Define test cases for error handling:
+    # (args_list, expected_exit_code, expected_error_msg_substring)
+    error_cases = [
+        (
+            [],
+            1,
+            "必須指定 --file 參數"
+        ),
+        (
+            ["-f", "nonexistent_file_xyz.md"],
+            1,
+            "錯誤：輸入檔案不存在 'nonexistent_file_xyz.md'"
+        ),
+        (
+            ["-f", "test"],
+            1,
+            "錯誤：輸入路徑是目錄而非檔案 'test'"
+        ),
+        (
+            ["-f", "test/ruby.md", "-o", "test"],
+            1,
+            "錯誤：輸出路徑是目錄，無法作為檔案寫入 'test'"
+        ),
+        (
+            ["-f", "test/ruby.md", "-o", "nonexistent_dir_xyz/out.htm"],
+            1,
+            "錯誤：輸出路徑的父目錄不存在 'nonexistent_dir_xyz'"
+        )
+    ]
+
+    for args, expected_code, expected_msg in error_cases:
+        cmd = [sys.executable, "rubymark.py"] + args
+        print(f"Testing cmd: {' '.join(cmd)} ...", end=" ")
+        
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+        
+        # Check exit code
+        if res.returncode != expected_code:
+            print("FAIL (exit code)")
+            print(f"  Expected exit code: {expected_code}")
+            print(f"  Got exit code: {res.returncode}")
+            print(f"  Stderr: {res.stderr.strip()}")
+            failed = True
+            continue
+
+        # Check error message in stdout or stderr
+        output = res.stdout + res.stderr
+        if expected_msg not in output:
+            print("FAIL (message)")
+            print(f"  Expected substring: '{expected_msg}'")
+            print(f"  Got output: {output.strip()}")
+            failed = True
+        else:
+            print("PASS")
+
+    return not failed
 
 if __name__ == "__main__":
     run_tests()
